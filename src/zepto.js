@@ -6,6 +6,7 @@ var Zepto = (function() {
   var undefined, key, $, classList, emptyArray = [], concat = emptyArray.concat, filter = emptyArray.filter, slice = emptyArray.slice,
     document = window.document,
     elementDisplay = {}, classCache = {},
+    // css中值为数字的属性（竟然只有这么几个）
     cssNumber = { 'column-count': 1, 'columns': 1, 'font-weight': 1, 'line-height': 1,'opacity': 1, 'z-index': 1, 'zoom': 1 },
     fragmentRE = /^\s*<(\w+|!)[^>]*>/,
     singleTagRE = /^<(\w+)\s*\/?>(?:<\/\1>|)$/,
@@ -46,17 +47,25 @@ var Zepto = (function() {
       'frameborder': 'frameBorder',
       'contenteditable': 'contentEditable'
     },
+    // Array.isArray ECMA5.1标准方法
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/isArray
+    // 如果不存在，就新定义一个
     isArray = Array.isArray ||
       function(object){ return object instanceof Array }
 
   zepto.matches = function(element, selector) {
     if (!selector || !element || element.nodeType !== 1) return false
+    // DOM API: Element.matches() 兼容性不好，浏览器各自实现带有前缀的API
+    // https://developer.mozilla.org/en-US/docs/Web/API/Element/matches
     var matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||
                           element.oMatchesSelector || element.matchesSelector
     if (matchesSelector) return matchesSelector.call(element, selector)
     // fall back to performing a selector:
+    // temp针对没有父节点的元素（不在当前文档中？）
     var match, parent = element.parentNode, temp = !parent
+    // 34行 tempParent = document.createElement('div'),
     if (temp) (parent = tempParent).appendChild(element)
+    // ~ 位运算符 按位非（NOT）
     match = ~zepto.qsa(parent, selector).indexOf(element)
     temp && tempParent.removeChild(element)
     return match
@@ -64,55 +73,88 @@ var Zepto = (function() {
 
   function type(obj) {
     return obj == null ? String(obj) :
+      // 常用的模式
+      // toString={}.toString
+      // toString=Object.prototype.toString
+      // class2type是个字典对象，见394行
       class2type[toString.call(obj)] || "object"
   }
 
   function isFunction(value) { return type(value) == "function" }
+  // window.window指向自身，window.window.window.window......也指向自身
+  // https://developer.mozilla.org/en-US/docs/Web/API/Window/window
   function isWindow(obj)     { return obj != null && obj == obj.window }
+  // 根据nodeType判断是否是document
+  // https://developer.mozilla.org/en-US/docs/Web/API/Node/nodeType
   function isDocument(obj)   { return obj != null && obj.nodeType == obj.DOCUMENT_NODE }
   function isObject(obj)     { return type(obj) == "object" }
+  // Object.getPrototypeOf() 方法返回指定对象的原型
+  // 文档注释：True if the object is a “plain” JavaScript object, which is only true for object literals and objects created with new Object.
   function isPlainObject(obj) {
     return isObject(obj) && !isWindow(obj) && Object.getPrototypeOf(obj) == Object.prototype
   }
   function likeArray(obj) { return typeof obj.length == 'number' }
-
+  // filter=[].filter
+  // 滤掉是null或undefined的元素
   function compact(array) { return filter.call(array, function(item){ return item != null }) }
+  // TODO
   function flatten(array) { return array.length > 0 ? $.fn.concat.apply([], array) : array }
+  // /-+(.)?/g匹配一个或多个连续的横线-，和紧跟的字符，如果字符存在，就把字符大写
+  // 注意正则中括号里的子规则，子规则匹配的字符可以在函数中接收
+  // 作用：'default-option' -> 'defaultOption'
   camelize = function(str){ return str.replace(/-+(.)?/g, function(match, chr){ return chr ? chr.toUpperCase() : '' }) }
+  // 目测效果与camelize相反
   function dasherize(str) {
     return str.replace(/::/g, '/')
+            // 这种写法：$1匹配的第一个子串，$2匹配第二个子串，拼接一个下划线
            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
            .replace(/([a-z\d])([A-Z])/g, '$1_$2')
            .replace(/_/g, '-')
            .toLowerCase()
   }
+  // 数组去重
+  // 因为indexOf返回第一个匹配的位置，所以对于重复元素array.indexOf(item)和idx不相等
+  // 惊为天人了
   uniq = function(array){ return filter.call(array, function(item, idx){ return array.indexOf(item) == idx }) }
-
+  // 动态创建正则，缓存在classCache
+  // 暂时不知道用处
   function classRE(name) {
     return name in classCache ?
       classCache[name] : (classCache[name] = new RegExp('(^|\\s)' + name + '(\\s|$)'))
   }
-
+  // value是数字，而属性的值又不能是数字时，加上单位'px'
   function maybeAddPx(name, value) {
     return (typeof value == "number" && !cssNumber[dasherize(name)]) ? value + "px" : value
   }
 
+  // 获取元素默认display值
+  // 这方法不错
   function defaultDisplay(nodeName) {
     var element, display
+    // 缓存缓存，先从缓存里取
     if (!elementDisplay[nodeName]) {
       element = document.createElement(nodeName)
       document.body.appendChild(element)
+      // window.getComputedStyle返回一个CSSStyleDeclaration对象（css键值对的集合）
+      // CSSStyleDeclaration对象提供了获取属性的方法getPropertyValue
+      // https://developer.mozilla.org/zh-CN/docs/Web/API/Window/getComputedStyle
+      // https://developer.mozilla.org/zh-CN/docs/Web/API/CSSStyleDeclaration
       display = getComputedStyle(element, '').getPropertyValue("display")
       element.parentNode.removeChild(element)
+      // 这句不懂。难道有元素默认display值是none？就算是none为啥设置成'block'？
       display == "none" && (display = "block")
       elementDisplay[nodeName] = display
     }
     return elementDisplay[nodeName]
   }
 
+  // 返回子元素
   function children(element) {
+    // children返回所有元素节点，但兼容性不好
     return 'children' in element ?
+      // slice.call把类数组对象转化成真正的数组
       slice.call(element.children) :
+      // nodeType 1 代表元素，要过滤一下，因为childNodes会返回文本节点
       $.map(element.childNodes, function(node){ if (node.nodeType == 1) return node })
   }
 
