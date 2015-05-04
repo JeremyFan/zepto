@@ -63,7 +63,7 @@ var Zepto = (function() {
     // fall back to performing a selector:
     // temp针对没有父节点的元素（不在当前文档中？）
     var match, parent = element.parentNode, temp = !parent
-    // 34行 tempParent = document.createElement('div'),
+    // tempParent = document.createElement('div'),
     if (temp) (parent = tempParent).appendChild(element)
     // ~ 位运算符 按位非（NOT）
     match = ~zepto.qsa(parent, selector).indexOf(element)
@@ -123,6 +123,7 @@ var Zepto = (function() {
       classCache[name] : (classCache[name] = new RegExp('(^|\\s)' + name + '(\\s|$)'))
   }
   // value是数字，而属性的值又不能是数字时，加上单位'px'
+  // cssNumber = { 'column-count': 1, 'columns': 1, 'font-weight': 1, 'line-height': 1,'opacity': 1, 'z-index': 1, 'zoom': 1 },
   function maybeAddPx(name, value) {
     return (typeof value == "number" && !cssNumber[dasherize(name)]) ? value + "px" : value
   }
@@ -158,6 +159,8 @@ var Zepto = (function() {
       $.map(element.childNodes, function(node){ if (node.nodeType == 1) return node })
   }
 
+  // 构造函数Z
+  // 遍历dom元素赋给this
   function Z(dom, selector) {
     var i, len = dom ? dom.length : 0
     for (i = 0; i < len; i++) this[i] = dom[i]
@@ -170,19 +173,37 @@ var Zepto = (function() {
   // The generated DOM nodes are returned as an array.
   // This function can be overriden in plugins for example to make
   // it compatible with browsers that don't support the DOM fully.
+  //
+  // 还有不少没明白的地方
   zepto.fragment = function(html, name, properties) {
     var dom, nodes, container
 
     // A special case optimization for a single tag
+    // singleTagRE = /^<(\w+)\s*\/?>(?:<\/\1>|)$/
+    // (?:pattern)匹配pattern但不获取匹配结果
+    // \num匹配之前匹配的引用
+    // 所以这里(?:<\/\1>|)匹配的是闭合标签或什么都没有，比如：<div>, <div></div>, <div />
+    // 正则还有很多要学。。
     if (singleTagRE.test(html)) dom = $(document.createElement(RegExp.$1))
 
     if (!dom) {
+      // tagExpanderRE = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\w:]+)[^>]*)\/>/ig,
+      // 没看懂，应该是修改闭合标签什么的
       if (html.replace) html = html.replace(tagExpanderRE, "<$1></$2>")
+      // fragmentRE = /^\s*<(\w+|!)[^>]*>/,
       if (name === undefined) name = fragmentRE.test(html) && RegExp.$1
+      // containers = {
+      //   'tr': document.createElement('tbody'),
+      //   'tbody': table, 'thead': table, 'tfoot': table,
+      //   'td': tableRow, 'th': tableRow,
+      //   '*': document.createElement('div')
+      // },
       if (!(name in containers)) name = '*'
 
       container = containers[name]
+      // 将html片段放入container
       container.innerHTML = '' + html
+      // 返回container的子节点，这里不明白为什么要把子节点都从container中删除
       dom = $.each(slice.call(container.childNodes), function(){
         container.removeChild(this)
       })
@@ -191,6 +212,8 @@ var Zepto = (function() {
     if (isPlainObject(properties)) {
       nodes = $(dom)
       $.each(properties, function(key, value) {
+        // methodAttributes = ['val', 'css', 'html', 'text', 'data', 'width', 'height', 'offset'],
+        // 方法属性需要执行一下
         if (methodAttributes.indexOf(key) > -1) nodes[key](value)
         else nodes.attr(key, value)
       })
@@ -202,6 +225,10 @@ var Zepto = (function() {
   // `$.zepto.Z` swaps out the prototype of the given `dom` array
   // of nodes with `$.fn` and thus supplying all the Zepto functions
   // to the array. This method can be overriden in plugins.
+  //
+  // 因为 zepto.Z.prototype = Z.prototype = $.fn
+  // 所以 构造函数Z中的this有$.fn的方法
+  // 所以返回的实例可以使用$.fn的方法
   zepto.Z = function(dom, selector) {
     return new Z(dom, selector)
   }
@@ -216,6 +243,8 @@ var Zepto = (function() {
   // takes a CSS selector and an optional context (and handles various
   // special cases).
   // This method can be overriden in plugins.
+  //
+  // 非常健壮的接口，应对各种参数
   zepto.init = function(selector, context) {
     var dom
     // If nothing given, return an empty Zepto collection
@@ -235,6 +264,8 @@ var Zepto = (function() {
       else dom = zepto.qsa(document, selector)
     }
     // If a function is given, call it when the DOM is ready
+    //
+    // 原来常用的这种写法$(function(){...})出自这里
     else if (isFunction(selector)) return $(document).ready(selector)
     // If a Zepto collection is given, just return it
     else if (zepto.isZ(selector)) return selector
@@ -267,22 +298,32 @@ var Zepto = (function() {
 
   function extend(target, source, deep) {
     for (key in source)
+      // 这个属性是对象或数组
       if (deep && (isPlainObject(source[key]) || isArray(source[key]))) {
+        // target中不存在这个属性，给一个空的初始值
         if (isPlainObject(source[key]) && !isPlainObject(target[key]))
           target[key] = {}
         if (isArray(source[key]) && !isArray(target[key]))
           target[key] = []
+
         extend(target[key], source[key], deep)
       }
+      // 属性不是对象或数组，就把属性值赋给target[key]
       else if (source[key] !== undefined) target[key] = source[key]
   }
 
   // Copy all but undefined properties from one or more
   // objects to the `target` object.
+  //
+  // 对于参数有个小trick，用起来更方便，不错
   $.extend = function(target){
+    // args取到第2, 3, 4...个参数
     var deep, args = slice.call(arguments, 1)
+    // 如果第一个参数传了true/false进来，那就简单处理一下
     if (typeof target == 'boolean') {
+      // 传进来的true/false代表是否深度扩展
       deep = target
+      // target目标对象取第2个参数
       target = args.shift()
     }
     args.forEach(function(arg){ extend(target, arg, deep) })
@@ -292,14 +333,18 @@ var Zepto = (function() {
   // `$.zepto.qsa` is Zepto's CSS selector implementation which
   // uses `document.querySelectorAll` and optimizes for some special cases, like `#id`.
   // This method can be overriden in plugins.
+  //
+  // 除id选择，class选择和标签选择外，使用querySelectorAll
   zepto.qsa = function(element, selector){
     var found,
         maybeID = selector[0] == '#',
         maybeClass = !maybeID && selector[0] == '.',
         nameOnly = maybeID || maybeClass ? selector.slice(1) : selector, // Ensure that a 1 char tag name still gets checked
+        // simpleSelectorRE = /^[\w-]*$/,
         isSimple = simpleSelectorRE.test(nameOnly)
     return (element.getElementById && isSimple && maybeID) ? // Safari DocumentFragment doesn't have getElementById
       ( (found = element.getElementById(nameOnly)) ? [found] : [] ) :
+      // 1:ELEMENT_NODE, 9:DOCUMENT_NODE, 11:DOCUMENT_FRAGMENT_NODE
       (element.nodeType !== 1 && element.nodeType !== 9 && element.nodeType !== 11) ? [] :
       slice.call(
         isSimple && !maybeID && element.getElementsByClassName ? // DocumentFragment doesn't have getElementsByClassName/TagName
