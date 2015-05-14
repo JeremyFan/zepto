@@ -53,6 +53,7 @@ var Zepto = (function() {
     isArray = Array.isArray ||
       function(object){ return object instanceof Array }
 
+  // 元素是否匹配选择器
   zepto.matches = function(element, selector) {
     if (!selector || !element || element.nodeType !== 1) return false
     // DOM API: Element.matches() 兼容性不好，浏览器各自实现带有前缀的API
@@ -93,6 +94,9 @@ var Zepto = (function() {
   function isPlainObject(obj) {
     return isObject(obj) && !isWindow(obj) && Object.getPrototypeOf(obj) == Object.prototype
   }
+  /**
+   * 判断是否为类数组，依据为对象是否有数值类型的'length'属性
+   */
   function likeArray(obj) { return typeof obj.length == 'number' }
   // filter=[].filter
   // 滤掉是null或undefined的元素
@@ -354,28 +358,53 @@ var Zepto = (function() {
       )
   }
 
+  // 根据选择器过滤节点
   function filtered(nodes, selector) {
     return selector == null ? $(nodes) : $(nodes).filter(selector)
   }
 
+  // Node.contains()返回一个布尔值来表示是否传入的节点是，该节点的子节点。
+  // 如果 otherNode 是 node 的后代节点或是 node 节点本身.则返回true , 否则返回 false.
+  // https://developer.mozilla.org/zh-CN/docs/Web/API/Node/contains
   $.contains = document.documentElement.contains ?
     function(parent, node) {
       return parent !== node && parent.contains(node)
     } :
+
+    /**
+     * 如果不支持contains，手动实现一个
+     */
     function(parent, node) {
+      // node存在，node重新赋值为node的父节点，相当于一层一层遍历父节点，直到没有父节点为止
       while (node && (node = node.parentNode))
         if (node === parent) return true
       return false
     }
-
+  /**
+   * 不明觉厉
+   * TODO
+   */
   function funcArg(context, arg, idx, payload) {
     return isFunction(arg) ? arg.call(context, idx, payload) : arg
   }
-
+  /**
+   * 给元素设置属性，如果value为null，移除属性
+   * @param node 元素
+   * @param name 属性名
+   * @param value 属性值
+   */
   function setAttribute(node, name, value) {
+    // Element.removeAttribute()移除一个属性
+    // https://developer.mozilla.org/zh-CN/docs/Web/API/Element/removeAttribute
+    // Element.setAttribute()设置一个属性
+    // https://developer.mozilla.org/zh-CN/docs/Web/API/Element/setAttribute
     value == null ? node.removeAttribute(name) : node.setAttribute(name, value)
   }
 
+  /**
+   * 不明觉厉
+   * TODO
+   */
   // access className property while respecting SVGAnimatedString
   function className(node, value){
     var klass = node.className || '',
@@ -385,21 +414,32 @@ var Zepto = (function() {
     svg ? (klass.baseVal = value) : (node.className = value)
   }
 
-  // "true"  => true
-  // "false" => false
-  // "null"  => null
-  // "42"    => 42
-  // "42.5"  => 42.5
-  // "08"    => "08"
-  // JSON    => parse if valid
-  // String  => self
+  /**
+   * 反序列化字符串
+   * 
+   * @param value 要反序列化的字符串
+   *
+   * @return
+   * "true"  => true
+   * "false" => false
+   * "null"  => null
+   * "42"    => 42
+   * "42.5"  => 42.5
+   * "08"    => "08"
+   * JSON    => parse if valid
+   * String  => self
+   */
+
   function deserializeValue(value) {
     try {
       return value ?
         value == "true" ||
         ( value == "false" ? false :
           value == "null" ? null :
+          // 先把value转成数值，再转成字符串，如果结果和原value相等，就把value转成数字
+          // 应对"08"这种情况
           +value + "" == value ? +value :
+          // 如果value以\[\{开头，尝试转成JSON对象
           /^[\[\{]/.test(value) ? $.parseJSON(value) :
           value )
         : value
@@ -414,17 +454,34 @@ var Zepto = (function() {
   $.isArray = isArray
   $.isPlainObject = isPlainObject
 
+  /**
+   *判断是否为空对象
+   */
   $.isEmptyObject = function(obj) {
     var name
     for (name in obj) return false
     return true
   }
 
+  /**
+   * 判断元素是否在数组中
+   *
+   * @param elem 元素
+   * @param array 数组
+   * @param i fromIndex
+   *
+   * @return 和indexOf类似
+   */
   $.inArray = function(elem, array, i){
     return emptyArray.indexOf.call(array, elem, i)
   }
 
   $.camelCase = camelize
+  /**
+   * 去空格
+   * @param str 需要去空格的字符串
+   * @return 去掉空格后新字符串
+   */
   $.trim = function(str) {
     return str == null ? "" : String.prototype.trim.call(str)
   }
@@ -435,6 +492,13 @@ var Zepto = (function() {
   $.expr = { }
   $.noop = function() {}
 
+  /**
+   * 根据规则生成新的数组
+   * @param elements 原 数组或类数组
+   * @param callback 处理规则
+   *
+   * @return 新数组 
+   */
   $.map = function(elements, callback){
     var value, values = [], i, key
     if (likeArray(elements))
@@ -450,10 +514,21 @@ var Zepto = (function() {
     return flatten(values)
   }
 
+  /**
+   * 遍历数组
+   * @param elements 原 数组或类数组
+   * @param callback 处理规则
+   *
+   * @return 新数组
+   *
+   * Q: 为什么$.map中的callback接收的参数先是元素，再是索引，
+   * 而$.each中的callback接收的参数先是索引，再是元素？
+   */
   $.each = function(elements, callback){
     var i, key
     if (likeArray(elements)) {
       for (i = 0; i < elements.length; i++)
+        // 当前元素作为上下文
         if (callback.call(elements[i], i, elements[i]) === false) return elements
     } else {
       for (key in elements)
@@ -463,6 +538,9 @@ var Zepto = (function() {
     return elements
   }
 
+  /**
+   * 根据规则过滤元素
+   */
   $.grep = function(elements, callback){
     return filter.call(elements, callback)
   }
@@ -486,10 +564,20 @@ var Zepto = (function() {
     reduce: emptyArray.reduce,
     push: emptyArray.push,
     sort: emptyArray.sort,
+    // splice 删除数组存在的元素，并添加指定的元素
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/splice
     splice: emptyArray.splice,
     indexOf: emptyArray.indexOf,
+    /**
+     * 给数组增加元素
+     *
+     * @param 可以传很多个Zepto对象或数组（内部arguments接收）
+     *
+     * @return 新数组
+     */
     concat: function(){
       var i, value, args = []
+      // 先把不是数组的参数转换成数组，放到args
       for (i = 0; i < arguments.length; i++) {
         value = arguments[i]
         args[i] = zepto.isZ(value) ? value.toArray() : value
@@ -509,56 +597,119 @@ var Zepto = (function() {
     ready: function(callback){
       // need to check if document.body exists for IE as that browser reports
       // document ready when it hasn't yet created the body element
+      //
+      // readyRE = /complete|loaded|interactive/,
+      // 如果当前readyState为complete，loaded，interactive，直接执行callback
       if (readyRE.test(document.readyState) && document.body) callback($)
+      // 页面文档完全加载并解析完毕之后,会触发DOMContentLoaded事件，HTML文档不会等待样式文件,图片文件,子框架页面的加载
+      // https://developer.mozilla.org/zh-CN/docs/Web/Events/DOMContentLoaded
       else document.addEventListener('DOMContentLoaded', function(){ callback($) }, false)
       return this
     },
+    /**
+     * 获取数组或指定数组元素
+     *
+     * @param idx 元素索引，可以为负。
+     *            如果不传idx，则获取整个数组（注意类数组也会被转成数组）
+     *
+     * @return Array/DOM node
+     */
     get: function(idx){
+      // idx >= 0 ? idx : idx + this.length 允许idx为负
       return idx === undefined ? slice.call(this) : this[idx >= 0 ? idx : idx + this.length]
     },
+    /**
+     * 把类数组对象转换成数组
+     */
     toArray: function(){ return this.get() },
+    /**
+     * 元素个数
+     * Q: 为什么要再定义一个size方法？
+     */
     size: function(){
       return this.length
     },
+    /**
+     * 遍历删除所有元素
+     */
     remove: function(){
       return this.each(function(){
         if (this.parentNode != null)
           this.parentNode.removeChild(this)
       })
     },
+    /**
+     * 遍历集合
+     *
+     * @param callback 回调
+     *
+     * @return this
+     */
     each: function(callback){
       emptyArray.every.call(this, function(el, idx){
         return callback.call(el, idx, el) !== false
       })
       return this
     },
+    /**
+     * 过滤元素
+     *
+     * @param selector 可以是function，也可以是选择器
+     */
     filter: function(selector){
       if (isFunction(selector)) return this.not(this.not(selector))
       return $(filter.call(this, function(element){
         return zepto.matches(element, selector)
       }))
     },
+    /**
+     * 添加元素
+     *
+     * @param selector 选择器
+     * @pararm context 上下文，只在此范围内查找
+     */
     add: function(selector,context){
+      // uniq() 去重
       return $(uniq(this.concat($(selector,context))))
     },
+    /**
+     * 检测集合第一个元素是否匹配选择器
+     */
     is: function(selector){
       return this.length > 0 && zepto.matches(this[0], selector)
     },
+    /**
+     * 过滤元素
+     *
+     * @param selector 可以是function，也可以是选择器
+     */
     not: function(selector){
       var nodes=[]
+      // selector 是函数
       if (isFunction(selector) && selector.call !== undefined)
         this.each(function(idx){
           if (!selector.call(this,idx)) nodes.push(this)
         })
       else {
+        // selector 是字符串
         var excludes = typeof selector == 'string' ? this.filter(selector) :
+        // selector 是类数组
+        // Q: seletor.item 这块没看懂
           (likeArray(selector) && isFunction(selector.item)) ? slice.call(selector) : $(selector)
+        // 遍历当前集合，如果元素不在excludes，推入nodes
         this.forEach(function(el){
           if (excludes.indexOf(el) < 0) nodes.push(el)
         })
       }
       return $(nodes)
     },
+    /**
+     * 过滤当前集合
+     *
+     * @param selector 可以是节点，也可以是选择器
+     *
+     * return 过滤后的新集合
+     */
     has: function(selector){
       return this.filter(function(){
         return isObject(selector) ?
@@ -566,7 +717,15 @@ var Zepto = (function() {
           $(this).find(selector).size()
       })
     },
+    /**
+     * 根据索引获取元素
+     *
+     * param idx 索引
+     *
+     * return Array（虽然只有1个元素，这与get不同）
+     */
     eq: function(idx){
+      // 索引-1之所以特殊，因为[1,2,3].slice(-1,0)返回[]，参数end为0会出问题
       return idx === -1 ? this.slice(idx) : this.slice(idx, + idx + 1)
     },
     first: function(){
