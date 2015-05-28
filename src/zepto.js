@@ -728,35 +728,78 @@ var Zepto = (function() {
       // 索引-1之所以特殊，因为[1,2,3].slice(-1,0)返回[]，参数end为0会出问题
       return idx === -1 ? this.slice(idx) : this.slice(idx, + idx + 1)
     },
+    /**
+     * 获取集合第一个元素
+     * 
+     * @return 如果元素是对象，就包装成Zepto对象，如果不是，直接返回
+     */
     first: function(){
       var el = this[0]
       return el && !isObject(el) ? el : $(el)
     },
+    /**
+     * 获取集合最后一个元素
+     * 
+     * @return 同first
+     */
     last: function(){
       var el = this[this.length - 1]
       return el && !isObject(el) ? el : $(el)
     },
+    /**
+     * 查找元素
+     * 
+     * @param selector 接收各种参数
+     *
+     * @return Zepto集合
+     */
     find: function(selector){
       var result, $this = this
+      // 如果selector不存在，或为空字符串，则返回空集合
       if (!selector) result = $()
+      // 如果selector是对象（Zepto集合，普通数组，单个对象）
       else if (typeof selector == 'object')
         result = $(selector).filter(function(){
           var node = this
+          // some() 方法测试数组中的某些元素是否通过了指定函数的测试。
+          // https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Array/some
+          // 调用find方法的集合中是否有元素是node的祖先节点
+          // 如果有，返回true，通过过滤
           return emptyArray.some.call($this, function(parent){
             return $.contains(parent, node)
           })
         })
+      // 走到这里，selector是正常的选择器了，如果当前集合只有1个元素
       else if (this.length == 1) result = $(zepto.qsa(this[0], selector))
+      // 集合有多个元素，需要用map遍历
       else result = this.map(function(){ return zepto.qsa(this, selector) })
       return result
     },
+    /**
+     * 向上遍历（包含自身），选中第一个符合选择器的元素
+     *
+     * @param selector 选择器
+     * @param context 可选，限制选择器的上下文
+     *
+     * return Zepto对象
+     */
     closest: function(selector, context){
+      // 只选一个元素
       var node = this[0], collection = false
+      // 如果selector是对象，先把对象转成Zepto集合，赋值给collection
       if (typeof selector == 'object') collection = $(selector)
+      // collection是false说明selector不是对象，当作选择器来处理
       while (node && !(collection ? collection.indexOf(node) >= 0 : zepto.matches(node, selector)))
+        // node不等于context，不是document节点时，node被赋值为父节点，继续循环，直到collection包含node或node匹配选择器
+        // 如果遍历到context或document节点，node被赋值为false，结束循环
         node = node !== context && !isDocument(node) && node.parentNode
       return $(node)
     },
+    /**
+     * 获取集合中每个元素的祖先节点
+     *
+     * @param selector 选择器 可选
+     */
     parents: function(selector){
       var ancestors = [], nodes = this
       while (nodes.length > 0)
@@ -768,23 +811,61 @@ var Zepto = (function() {
         })
       return filtered(ancestors, selector)
     },
+    /**
+     * 获取集合中每个元素的父节点
+     *
+     * @param selector 父节点需要符合的选择器
+     *
+     * @return 父节点集合
+     */
     parent: function(selector){
       return filtered(uniq(this.pluck('parentNode')), selector)
     },
+    /**
+     * 获取集合中每个元素的子节点
+     *
+     * @param selector 子节点需要符合的选择器
+     *
+     * @return 子节点集合
+     *
+     * TODO: 这个实现没有看懂
+     */
     children: function(selector){
       return filtered(this.map(function(){ return children(this) }), selector)
     },
+    /**
+     * 返回集合中每个元素的子节点，包括文本节点和注释节点
+     *
+     * @return 子节点集合
+     */
     contents: function() {
+      // contentDocument这个属性不太熟悉，目测是对于iframe元素，会返回document
       return this.map(function() { return this.contentDocument || slice.call(this.childNodes) })
     },
+    /**
+     * 获取集合中每个元素的兄弟节点
+     * 思路：获取父节点的所有子节点，过滤出不是自身的元素
+     *
+     * @param selector 选择器限制
+     */
     siblings: function(selector){
       return filtered(this.map(function(i, el){
         return filter.call(children(el.parentNode), function(child){ return child!==el })
       }), selector)
     },
+    /**
+     * 清空集合中每个元素的内容
+     */
     empty: function(){
       return this.each(function(){ this.innerHTML = '' })
     },
+    /**
+     * 获取集合中每个元素的指定属性的值
+     *
+     * @param property 指定属性
+     *
+     * @return 新的集合
+     */
     // `pluck` is borrowed from Prototype.js
     pluck: function(property){
       return $.map(this, function(el){ return el[property] })
