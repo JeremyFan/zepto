@@ -1,5 +1,5 @@
 //     Zepto.js
-//     (c) 2010-2015 Thomas Fuchs
+//     (c) 2010-2016 Thomas Fuchs
 //     Zepto.js may be freely distributed under the MIT license.
 
 var Zepto = (function() {
@@ -173,9 +173,9 @@ var Zepto = (function() {
   }
 
   // `$.zepto.fragment` takes a html string and an optional tag name
-  // to generate DOM nodes nodes from the given html string.
+  // to generate DOM nodes from the given html string.
   // The generated DOM nodes are returned as an array.
-  // This function can be overriden in plugins for example to make
+  // This function can be overridden in plugins for example to make
   // it compatible with browsers that don't support the DOM fully.
   //
   // 还有不少没明白的地方
@@ -238,7 +238,7 @@ var Zepto = (function() {
   }
 
   // `$.zepto.isZ` should return `true` if the given object is a Zepto
-  // collection. This method can be overriden in plugins.
+  // collection. This method can be overridden in plugins.
   zepto.isZ = function(object) {
     return object instanceof zepto.Z
   }
@@ -945,7 +945,7 @@ var Zepto = (function() {
           var newText = funcArg(this, text, idx, this.textContent)
           this.textContent = newText == null ? '' : ''+newText
         }) :
-        (0 in this ? this[0].textContent : null)
+        (0 in this ? this.pluck('textContent').join("") : null)
     },
     attr: function(name, value){
       var result
